@@ -46,6 +46,10 @@ func (m *ModelCatalogServiceAPIService) FindModels(ctx context.Context, sourceID
 		return notFound("Unknown source"), errors.New("Unknown source")
 	}
 
+	if newQuery, err := url.QueryUnescape(q); err == nil {
+		q = newQuery
+	}
+
 	p, err := newPaginator[model.CatalogModel](pageSize, orderBy, sortOrder, nextPageToken)
 	if err != nil {
 		return ErrorResponse(http.StatusBadRequest, err), err

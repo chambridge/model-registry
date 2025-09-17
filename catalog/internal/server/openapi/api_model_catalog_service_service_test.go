@@ -264,6 +264,26 @@ func TestFindModels(t *testing.T) {
 				NextPageToken: "",
 			},
 		},
+		{
+			name:     "URL encoded query with provider/model_name format",
+			sourceID: "source1",
+			mockModels: map[string]*model.CatalogModel{
+				"providerA/modelX": {Name: "providerA/modelX", CreateTimeSinceEpoch: timeToMillisStringPointer(time1), LastUpdateTimeSinceEpoch: timeToMillisStringPointer(time1)},
+				"providerB/modelY": {Name: "providerB/modelY", CreateTimeSinceEpoch: timeToMillisStringPointer(time2), LastUpdateTimeSinceEpoch: timeToMillisStringPointer(time2)},
+				"modelZ":           {Name: "modelZ", CreateTimeSinceEpoch: timeToMillisStringPointer(time3), LastUpdateTimeSinceEpoch: timeToMillisStringPointer(time3)},
+			},
+			q:              "providerA%2FmodelX", // URL encoded "providerA/modelX"
+			pageSize:       "10",
+			orderBy:        model.ORDERBYFIELD_NAME,
+			sortOrder:      model.SORTORDER_ASC,
+			expectedStatus: http.StatusOK,
+			expectedModelList: &model.CatalogModelList{
+				Items:         []model.CatalogModel{{Name: "providerA/modelX", CreateTimeSinceEpoch: timeToMillisStringPointer(time1), LastUpdateTimeSinceEpoch: timeToMillisStringPointer(time1)}}, // Only the matching model
+				Size:          1,
+				PageSize:      10,
+				NextPageToken: "",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -710,9 +730,28 @@ func (m *mockModelProvider) GetModel(ctx context.Context, name string) (*model.C
 func (m *mockModelProvider) ListModels(ctx context.Context, params catalog.ListModelsParams) (model.CatalogModelList, error) {
 	var filteredModels []*model.CatalogModel
 	for _, mdl := range m.models {
-		if params.Query == "" || strings.Contains(strings.ToLower(mdl.Name), strings.ToLower(params.Query)) {
-			filteredModels = append(filteredModels, mdl)
+		if params.Query != "" {
+			query := strings.ToLower(params.Query)
+			// Check if query matches name, description, tasks, provider, or libraryName
+			if !strings.Contains(strings.ToLower(mdl.Name), query) &&
+				!strings.Contains(strings.ToLower(mdl.GetDescription()), query) &&
+				!strings.Contains(strings.ToLower(mdl.GetProvider()), query) &&
+				!strings.Contains(strings.ToLower(mdl.GetLibraryName()), query) {
+
+				// Check tasks
+				foundInTasks := false
+				for _, task := range mdl.GetTasks() {
+					if strings.Contains(strings.ToLower(task), query) {
+						foundInTasks = true
+						break
+					}
+				}
+				if !foundInTasks {
+					continue // Skip if no match in any searchable field
+				}
+			}
 		}
+		filteredModels = append(filteredModels, mdl)
 	}
 
 	// Sort the filtered models
