@@ -1,4 +1,7 @@
-# Container Image Publishing Workflow
+# Container Image Publishing Workflow - TEST VERSION
+#
+# This is a TEMPORARY test workflow to validate changes before merging.
+# DO NOT MERGE THIS FILE - it's for PR testing only.
 #
 # This workflow builds and publishes the model-registry server container image
 # following modern supply chain security best practices per GitHub issue #1868.
@@ -12,29 +15,20 @@
 # - Automated tagging using docker/metadata-action
 #
 # Verification commands:
-#   Verify signature:    cosign verify --certificate-identity-regexp=github --certificate-oidc-issuer=https://token.actions.githubusercontent.com ghcr.io/kubeflow/model-registry/server:TAG
-#   Verify SBOM attest:  cosign verify-attestation --type spdx --certificate-identity-regexp=github --certificate-oidc-issuer=https://token.actions.githubusercontent.com ghcr.io/kubeflow/model-registry/server:TAG
-#   Download SBOM:       cosign download attestation --predicate-type=https://spdx.dev/Document ghcr.io/kubeflow/model-registry/server:TAG
-#   Verify provenance:   cosign verify-attestation --type slsaprovenance --certificate-identity-regexp=github --certificate-oidc-issuer=https://token.actions.githubusercontent.com ghcr.io/kubeflow/model-registry/server:TAG
+#   Verify signature:    cosign verify --certificate-identity-regexp=github --certificate-oidc-issuer=https://token.actions.githubusercontent.com ghcr.io/YOUR_USERNAME/model-registry/server:TAG
+#   Verify SBOM attest:  cosign verify-attestation --type spdx --certificate-identity-regexp=github --certificate-oidc-issuer=https://token.actions.githubusercontent.com ghcr.io/YOUR_USERNAME/model-registry/server:TAG
+#   Download SBOM:       cosign download attestation --predicate-type=https://spdx.dev/Document ghcr.io/YOUR_USERNAME/model-registry/server:TAG
+#   Verify provenance:   cosign verify-attestation --type slsaprovenance --certificate-identity-regexp=github --certificate-oidc-issuer=https://token.actions.githubusercontent.com ghcr.io/YOUR_USERNAME/model-registry/server:TAG
 
-name: Container image build and tag
+name: Container image build and tag (TEST)
 on:
   push:
     branches:
-      - 'main'
-    tags:
-      - 'v*'
-    paths-ignore:
-      - 'LICENSE*'
-      - '**.gitignore'
-      - '**.md'
-      - '**.txt'
-      - '.github/ISSUE_TEMPLATE/**'
-      - '.github/dependabot.yml'
-      - 'docs/**'
+      - 'chore/1868-modernize-container-image-publishing'  # YOUR TEST BRANCH
+  workflow_dispatch:  # Allows manual triggering from GitHub UI
 env:
   IMG_REGISTRY: ghcr.io
-  IMG_ORG: kubeflow
+  IMG_ORG: ${{ github.repository_owner }}  # Uses YOUR username instead of kubeflow
   IMG_REPO: model-registry/server
   DOCKER_USER: ${{ github.actor }}
   DOCKER_PWD: ${{ secrets.GITHUB_TOKEN }}
@@ -44,7 +38,10 @@ permissions: # set contents: read at top-level, per OpenSSF ScoreCard rule Token
 
 jobs:
   prepare:
-    uses: ./.github/workflows/prepare.yml
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dummy prepare step
+        run: echo "Prepare step placeholder - no actual prepare workflow in test"
   build-image:
     permissions:
       actions: read # anchore/sbom-action for syft
@@ -86,7 +83,7 @@ jobs:
           else
             # Fallback for PRs and other branches
             commit_sha=${{ github.sha }}
-            echo "VERSION=dev-${commit_sha:0:7}" >> $GITHUB_ENV
+            echo "VERSION=test-${commit_sha:0:7}" >> $GITHUB_ENV
           fi
 
       # Extract metadata (tags, labels) for Docker
@@ -100,9 +97,8 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=main-,format=short,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=test-,format=short
+            type=raw,value=test-latest
 
       # Build and push Docker image with multi-arch support
       - name: Build and push Docker image
@@ -160,3 +156,24 @@ jobs:
             --type spdx \
             --predicate "model-registry-server-${{ env.VERSION }}-sbom.spdx.json" \
             "${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/${{ env.IMG_REPO }}@${DIGEST}"
+
+      # Print verification instructions
+      - name: Print verification instructions
+        env:
+          DIGEST: ${{ steps.build-push.outputs.digest }}
+        run: |
+          echo "::notice::Image built and signed successfully!"
+          echo "::notice::Image: ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/${{ env.IMG_REPO }}@${DIGEST}"
+          echo ""
+          echo "Verification commands:"
+          echo "  Verify signature:"
+          echo "    cosign verify --certificate-identity-regexp=github --certificate-oidc-issuer=https://token.actions.githubusercontent.com ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/${{ env.IMG_REPO }}:${{ env.VERSION }}"
+          echo ""
+          echo "  Verify SBOM attestation:"
+          echo "    cosign verify-attestation --type spdx --certificate-identity-regexp=github --certificate-oidc-issuer=https://token.actions.githubusercontent.com ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/${{ env.IMG_REPO }}:${{ env.VERSION }}"
+          echo ""
+          echo "  Download SBOM:"
+          echo "    cosign download attestation --predicate-type=https://spdx.dev/Document ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/${{ env.IMG_REPO }}:${{ env.VERSION }}"
+          echo ""
+          echo "  Verify provenance:"
+          echo "    cosign verify-attestation --type slsaprovenance --certificate-identity-regexp=github --certificate-oidc-issuer=https://token.actions.githubusercontent.com ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/${{ env.IMG_REPO }}:${{ env.VERSION }}"
