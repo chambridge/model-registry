@@ -334,14 +334,14 @@ func applyCatalogModelListFilters(query *gorm.DB, listOptions *models.CatalogMod
 		propertyCondition := fmt.Sprintf("EXISTS (SELECT 1 FROM %s cp WHERE cp.context_id = %s.id AND cp.name IN (?, ?, ?) AND LOWER(cp.string_value) LIKE ?)",
 			propertyTable, contextTable)
 
-		// Search in tasks (assuming tasks are stored as comma-separated or multiple properties)
-		tasksCondition := fmt.Sprintf("EXISTS (SELECT 1 FROM %s cp WHERE cp.context_id = %s.id AND cp.name = ? AND LOWER(cp.string_value) LIKE ?)",
+		// Search in tasks and validated_tasks (stored as JSON arrays)
+		tasksCondition := fmt.Sprintf("EXISTS (SELECT 1 FROM %s cp WHERE cp.context_id = %s.id AND cp.name IN (?, ?) AND LOWER(cp.string_value) LIKE ?)",
 			propertyTable, contextTable)
 
 		query = query.Where(fmt.Sprintf("(%s OR %s OR %s)", nameCondition, propertyCondition, tasksCondition),
 			queryPattern,                                           // for name
 			"description", "provider", "libraryName", queryPattern, // for properties
-			"tasks", queryPattern, // for tasks
+			"tasks", "validated_tasks", queryPattern, // for tasks and validated_tasks
 		)
 	}
 

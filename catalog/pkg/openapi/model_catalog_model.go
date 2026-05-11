@@ -52,6 +52,9 @@ type CatalogModel struct {
 	LastUpdateTimeSinceEpoch *string `json:"lastUpdateTimeSinceEpoch,omitempty"`
 	// ID of the source this model belongs to.
 	SourceId *string `json:"source_id,omitempty"`
+	// List of tasks that have been validated for this model.
+	ValidatedTasks []string       `json:"validatedTasks,omitempty"`
+	ServingConfig  *ServingConfig `json:"servingConfig,omitempty"`
 }
 
 type _CatalogModel CatalogModel
@@ -610,6 +613,70 @@ func (o *CatalogModel) SetSourceId(v string) {
 	o.SourceId = &v
 }
 
+// GetValidatedTasks returns the ValidatedTasks field value if set, zero value otherwise.
+func (o *CatalogModel) GetValidatedTasks() []string {
+	if o == nil || IsNil(o.ValidatedTasks) {
+		var ret []string
+		return ret
+	}
+	return o.ValidatedTasks
+}
+
+// GetValidatedTasksOk returns a tuple with the ValidatedTasks field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CatalogModel) GetValidatedTasksOk() ([]string, bool) {
+	if o == nil || IsNil(o.ValidatedTasks) {
+		return nil, false
+	}
+	return o.ValidatedTasks, true
+}
+
+// HasValidatedTasks returns a boolean if a field has been set.
+func (o *CatalogModel) HasValidatedTasks() bool {
+	if o != nil && !IsNil(o.ValidatedTasks) {
+		return true
+	}
+
+	return false
+}
+
+// SetValidatedTasks gets a reference to the given []string and assigns it to the ValidatedTasks field.
+func (o *CatalogModel) SetValidatedTasks(v []string) {
+	o.ValidatedTasks = v
+}
+
+// GetServingConfig returns the ServingConfig field value if set, zero value otherwise.
+func (o *CatalogModel) GetServingConfig() ServingConfig {
+	if o == nil || IsNil(o.ServingConfig) {
+		var ret ServingConfig
+		return ret
+	}
+	return *o.ServingConfig
+}
+
+// GetServingConfigOk returns a tuple with the ServingConfig field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CatalogModel) GetServingConfigOk() (*ServingConfig, bool) {
+	if o == nil || IsNil(o.ServingConfig) {
+		return nil, false
+	}
+	return o.ServingConfig, true
+}
+
+// HasServingConfig returns a boolean if a field has been set.
+func (o *CatalogModel) HasServingConfig() bool {
+	if o != nil && !IsNil(o.ServingConfig) {
+		return true
+	}
+
+	return false
+}
+
+// SetServingConfig gets a reference to the given ServingConfig and assigns it to the ServingConfig field.
+func (o *CatalogModel) SetServingConfig(v ServingConfig) {
+	o.ServingConfig = &v
+}
+
 func (o CatalogModel) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -668,6 +735,12 @@ func (o CatalogModel) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.SourceId) {
 		toSerialize["source_id"] = o.SourceId
+	}
+	if !IsNil(o.ValidatedTasks) {
+		toSerialize["validatedTasks"] = o.ValidatedTasks
+	}
+	if !IsNil(o.ServingConfig) {
+		toSerialize["servingConfig"] = o.ServingConfig
 	}
 	return toSerialize, nil
 }

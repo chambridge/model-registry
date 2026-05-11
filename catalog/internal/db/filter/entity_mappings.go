@@ -154,6 +154,8 @@ var catalogModelProperties = map[string]filter.PropertyDefinition{
 	"tasks":          {Location: filter.PropertyTable, ValueType: filter.ArrayValueType, Column: "tasks"},
 	"tags":           {Location: filter.PropertyTable, ValueType: filter.ArrayValueType, Column: "tags"},
 	"verifiedSource": {Location: filter.PropertyTable, ValueType: filter.BoolValueType, Column: "verifiedSource"},
+	"validated_tasks":  {Location: filter.PropertyTable, ValueType: filter.ArrayValueType, Column: "validated_tasks"},
+	"serving_config":   {Location: filter.PropertyTable, ValueType: filter.StringValueType, Column: "serving_config"},
 }
 
 // catalogArtifactProperties defines the allowed properties for CatalogArtifact entities

@@ -712,6 +712,8 @@ func TestDBCatalog(t *testing.T) {
 					{Name: "library_name", StringValue: apiutils.Of("pytorch")},
 					{Name: "language", StringValue: apiutils.Of("[\"python\", \"go\"]")},
 					{Name: "tasks", StringValue: apiutils.Of("[\"classification\", \"regression\"]")},
+					{Name: "validated_tasks", StringValue: apiutils.Of(`["text-generation","tool-calling"]`)},
+					{Name: "serving_config", StringValue: apiutils.Of(`{"toolCalling":{"toolCallParser":"granite","chatTemplate":"opt/app-root/template/tool_chat_template_granite.jinja","enableAutoToolChoice":true,"requiredArgs":["--config_format granite"]}}`)},
 				},
 			}
 
@@ -729,6 +731,15 @@ func TestDBCatalog(t *testing.T) {
 			// Verify JSON arrays are properly parsed
 			assert.Equal(t, []string{"python", "go"}, result.Language)
 			assert.Equal(t, []string{"classification", "regression"}, result.Tasks)
+			assert.Equal(t, []string{"text-generation", "tool-calling"}, result.ValidatedTasks)
+
+			// Verify nested JSON object is properly parsed
+			require.NotNil(t, result.ServingConfig)
+			require.NotNil(t, result.ServingConfig.ToolCalling)
+			assert.Equal(t, apiutils.Of("granite"), result.ServingConfig.ToolCalling.ToolCallParser)
+			assert.Equal(t, apiutils.Of("opt/app-root/template/tool_chat_template_granite.jinja"), result.ServingConfig.ToolCalling.ChatTemplate)
+			assert.Equal(t, model.PtrBool(true), result.ServingConfig.ToolCalling.EnableAutoToolChoice)
+			assert.Equal(t, []string{"--config_format granite"}, result.ServingConfig.ToolCalling.RequiredArgs)
 		})
 
 		t.Run("TestMapCatalogArtifactToCatalogArtifact", func(t *testing.T) {
@@ -779,6 +790,58 @@ func TestDBCatalog(t *testing.T) {
 			assert.Equal(t, "789", *result2.CatalogMetricsArtifact.Id)
 			assert.Equal(t, "test-metrics-artifact", *result2.CatalogMetricsArtifact.Name)
 			assert.Equal(t, "performance-metrics", result2.CatalogMetricsArtifact.MetricsType)
+		})
+
+		t.Run("TestMapCatalogModel_ValidatedTasksAndServingConfig_RoundTrip", func(t *testing.T) {
+			testModel := &models.CatalogModelImpl{
+				TypeID: apiutils.Of(int32(catalogModelTypeID)),
+				Attributes: &models.CatalogModelAttributes{
+					Name:       apiutils.Of("roundtrip-source:roundtrip-validated-serving"),
+					ExternalID: apiutils.Of("roundtrip-validated-serving-ext"),
+				},
+				Properties: &[]mr_models.Properties{
+					{Name: "source_id", StringValue: apiutils.Of("roundtrip-source")},
+					{Name: "validated_tasks", StringValue: apiutils.Of(`["text-generation","tool-calling"]`)},
+					{Name: "serving_config", StringValue: apiutils.Of(`{"toolCalling":{"toolCallParser":"granite","chatTemplate":"opt/app-root/template/tool_chat_template_granite.jinja","enableAutoToolChoice":false,"requiredArgs":["--config_format granite"]}}`)},
+				},
+			}
+
+			_, err := catalogModelRepo.Save(testModel)
+			require.NoError(t, err)
+
+			retrieved, err := dbCatalog.GetModel(ctx, "roundtrip-validated-serving", "roundtrip-source")
+			require.NoError(t, err)
+			require.NotNil(t, retrieved)
+
+			assert.Equal(t, []string{"text-generation", "tool-calling"}, retrieved.ValidatedTasks)
+			require.NotNil(t, retrieved.ServingConfig)
+			require.NotNil(t, retrieved.ServingConfig.ToolCalling)
+			assert.Equal(t, apiutils.Of("granite"), retrieved.ServingConfig.ToolCalling.ToolCallParser)
+			assert.Equal(t, apiutils.Of("opt/app-root/template/tool_chat_template_granite.jinja"), retrieved.ServingConfig.ToolCalling.ChatTemplate)
+			assert.Equal(t, model.PtrBool(false), retrieved.ServingConfig.ToolCalling.EnableAutoToolChoice)
+			assert.Equal(t, []string{"--config_format granite"}, retrieved.ServingConfig.ToolCalling.RequiredArgs)
+		})
+
+		t.Run("TestMapCatalogModel_MalformedJSON_SilentFailure", func(t *testing.T) {
+			catalogModel := &models.CatalogModelImpl{
+				ID:     apiutils.Of(int32(999)),
+				TypeID: apiutils.Of(int32(catalogModelTypeID)),
+				Attributes: &models.CatalogModelAttributes{
+					Name:       apiutils.Of("malformed-source:malformed-json-model"),
+					ExternalID: apiutils.Of("malformed-json-ext"),
+				},
+				Properties: &[]mr_models.Properties{
+					{Name: "source_id", StringValue: apiutils.Of("malformed-source")},
+					{Name: "validated_tasks", StringValue: apiutils.Of(`not valid json`)},
+					{Name: "serving_config", StringValue: apiutils.Of(`{broken}`)},
+				},
+			}
+
+			result := mapDBModelToAPIModel(catalogModel)
+
+			assert.Equal(t, "malformed-json-model", result.Name)
+			assert.Nil(t, result.ValidatedTasks)
+			assert.Nil(t, result.ServingConfig)
 		})
 
 		t.Run("TestMapCatalogArtifact_EmptyArtifact", func(t *testing.T) {
@@ -899,6 +962,7 @@ func TestDBCatalog(t *testing.T) {
 		assert.NotContains(t, filters, "logo", "logo should be excluded")
 		assert.NotContains(t, filters, "license_link", "license_link should be excluded")
 		assert.NotContains(t, filters, "readme", "readme should be excluded (too long)")
+		assert.NotContains(t, filters, "serving_config", "serving_config should be excluded (complex nested JSON)")
 
 		licenseFilter := filters["license"]
 		assert.Equal(t, "string", licenseFilter.Type)

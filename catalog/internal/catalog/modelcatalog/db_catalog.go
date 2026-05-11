@@ -210,7 +210,7 @@ func (d *dbCatalogImpl) GetFilterOptions(ctx context.Context) (*apimodels.Filter
 	for _, prop := range contextProperties {
 		// Skip internal/technical fields that shouldn't be exposed as filters
 		switch prop.Name {
-		case "source_id", "logo", "license_link":
+		case "source_id", "logo", "license_link", "serving_config":
 			continue
 		}
 
@@ -381,6 +381,22 @@ func mapDBModelToAPIModel(m models.CatalogModel) apimodels.CatalogModel {
 					var tasks []string
 					if err := json.Unmarshal([]byte(*prop.StringValue), &tasks); err == nil {
 						res.Tasks = tasks
+					}
+				}
+			case "validated_tasks":
+				if prop.StringValue != nil {
+					var validatedTasks []string
+					if err := json.Unmarshal([]byte(*prop.StringValue), &validatedTasks); err == nil {
+						res.ValidatedTasks = validatedTasks
+					}
+				}
+			case "serving_config":
+				if prop.StringValue != nil {
+					var servingConfig apimodels.ServingConfig
+					if err := json.Unmarshal([]byte(*prop.StringValue), &servingConfig); err != nil {
+						glog.Warningf("failed to unmarshal serving_config for model %s: %v", res.Name, err)
+					} else {
+						res.ServingConfig = &servingConfig
 					}
 				}
 			}

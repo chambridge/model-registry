@@ -204,6 +204,11 @@ func AssertCatalogModelArtifactRequired(obj model.CatalogModelArtifact) error {
 
 // AssertCatalogModelConstraints checks if the values respects the defined constraints
 func AssertCatalogModelConstraints(obj model.CatalogModel) error {
+	if obj.ServingConfig != nil {
+		if err := AssertServingConfigConstraints(*obj.ServingConfig); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -250,6 +255,11 @@ func AssertCatalogModelRequired(obj model.CatalogModel) error {
 		}
 	}
 
+	if obj.ServingConfig != nil {
+		if err := AssertServingConfigRequired(*obj.ServingConfig); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -1184,6 +1194,26 @@ func AssertOrderByFieldRequired(obj model.OrderByField) error {
 	return nil
 }
 
+// AssertServingConfigConstraints checks if the values respects the defined constraints
+func AssertServingConfigConstraints(obj model.ServingConfig) error {
+	if obj.ToolCalling != nil {
+		if err := AssertToolCallingConfigConstraints(*obj.ToolCalling); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AssertServingConfigRequired checks if the required fields are not zero-ed
+func AssertServingConfigRequired(obj model.ServingConfig) error {
+	if obj.ToolCalling != nil {
+		if err := AssertToolCallingConfigRequired(*obj.ToolCalling); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // AssertSortOrderConstraints checks if the values respects the defined constraints
 func AssertSortOrderConstraints(obj model.SortOrder) error {
 	return nil
@@ -1191,5 +1221,15 @@ func AssertSortOrderConstraints(obj model.SortOrder) error {
 
 // AssertSortOrderRequired checks if the required fields are not zero-ed
 func AssertSortOrderRequired(obj model.SortOrder) error {
+	return nil
+}
+
+// AssertToolCallingConfigConstraints checks if the values respects the defined constraints
+func AssertToolCallingConfigConstraints(obj model.ToolCallingConfig) error {
+	return nil
+}
+
+// AssertToolCallingConfigRequired checks if the required fields are not zero-ed
+func AssertToolCallingConfigRequired(obj model.ToolCallingConfig) error {
 	return nil
 }

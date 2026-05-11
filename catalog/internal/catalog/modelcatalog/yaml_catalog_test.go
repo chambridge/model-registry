@@ -37,11 +37,20 @@ func TestYamlModelToModelProviderRecord(t *testing.T) {
 					Maturity:                 apiutils.Of("Generally Available"),
 					Language:                 []string{"en", "fr"},
 					Tasks:                    []string{"text-generation", "nlp"},
+					ValidatedTasks:           []string{"text-generation", "tool-calling"},
 					Provider:                 apiutils.Of("IBM"),
 					Logo:                     apiutils.Of("https://example.com/logo.png"),
 					License:                  apiutils.Of("apache-2.0"),
 					LicenseLink:              apiutils.Of("https://www.apache.org/licenses/LICENSE-2.0"),
 					LibraryName:              apiutils.Of("transformers"),
+					ServingConfig: &model.ServingConfig{
+						ToolCalling: &model.ToolCallingConfig{
+							ToolCallParser:       apiutils.Of("granite"),
+							ChatTemplate:         apiutils.Of("opt/app-root/template/tool_chat_template_granite.jinja"),
+							EnableAutoToolChoice: model.PtrBool(true),
+							RequiredArgs:         []string{"--config_format granite"},
+						},
+					},
 					SourceId:                 apiutils.Of("test-source"),
 					CreateTimeSinceEpoch:     apiutils.Of("1678886400000"),
 					LastUpdateTimeSinceEpoch: apiutils.Of("1681564800000"),
@@ -168,6 +177,24 @@ func TestYamlModelToModelProviderRecord(t *testing.T) {
 				assert.Equal(t, []string{"text-generation", "nlp"}, tasks)
 				assert.False(t, regularPropMap["tasks"].IsCustomProperty)
 
+				assert.Contains(t, regularPropMap, "validated_tasks")
+				var validatedTasks []string
+				err = json.Unmarshal([]byte(*regularPropMap["validated_tasks"].StringValue), &validatedTasks)
+				require.NoError(t, err)
+				assert.Equal(t, []string{"text-generation", "tool-calling"}, validatedTasks)
+				assert.False(t, regularPropMap["validated_tasks"].IsCustomProperty)
+
+				assert.Contains(t, regularPropMap, "serving_config")
+				var servingConfig model.ServingConfig
+				err = json.Unmarshal([]byte(*regularPropMap["serving_config"].StringValue), &servingConfig)
+				require.NoError(t, err)
+				require.NotNil(t, servingConfig.ToolCalling)
+				assert.Equal(t, apiutils.Of("granite"), servingConfig.ToolCalling.ToolCallParser)
+				assert.Equal(t, apiutils.Of("opt/app-root/template/tool_chat_template_granite.jinja"), servingConfig.ToolCalling.ChatTemplate)
+				assert.Equal(t, model.PtrBool(true), servingConfig.ToolCalling.EnableAutoToolChoice)
+				assert.Equal(t, []string{"--config_format granite"}, servingConfig.ToolCalling.RequiredArgs)
+				assert.False(t, regularPropMap["serving_config"].IsCustomProperty)
+
 				// Check custom properties
 				customProps := record.Model.GetCustomProperties()
 				require.NotNil(t, customProps)
@@ -275,7 +302,7 @@ func TestYamlModelToModelProviderRecord(t *testing.T) {
 				if regularProps != nil {
 					*regularProps = slices.DeleteFunc(*regularProps, func(p models.Properties) bool {
 						switch p.Name {
-						case "language", "tasks":
+						case "language", "tasks", "validated_tasks":
 							return true
 						}
 						return false
@@ -381,6 +408,131 @@ func TestYamlModelToModelProviderRecord(t *testing.T) {
 				if customProps != nil {
 					assert.Empty(t, *customProps)
 				}
+			},
+		},
+		{
+			name: "model with validatedTasks only",
+			yamlModel: yamlModel{
+				CatalogModel: model.CatalogModel{
+					Name:           "model-validated-tasks",
+					ValidatedTasks: []string{"text-generation", "tool-calling"},
+				},
+			},
+			validateFunc: func(t *testing.T, record ModelProviderRecord) {
+				require.NotNil(t, record.Model)
+
+				regularProps := record.Model.GetProperties()
+				require.NotNil(t, regularProps)
+
+				regularPropMap := make(map[string]models.Properties)
+				for _, prop := range *regularProps {
+					regularPropMap[prop.Name] = prop
+				}
+
+				assert.Contains(t, regularPropMap, "validated_tasks")
+				var validatedTasks []string
+				err := json.Unmarshal([]byte(*regularPropMap["validated_tasks"].StringValue), &validatedTasks)
+				require.NoError(t, err)
+				assert.Equal(t, []string{"text-generation", "tool-calling"}, validatedTasks)
+
+				assert.NotContains(t, regularPropMap, "serving_config")
+			},
+		},
+		{
+			name: "model with servingConfig only",
+			yamlModel: yamlModel{
+				CatalogModel: model.CatalogModel{
+					Name: "model-serving-config",
+					ServingConfig: &model.ServingConfig{
+						ToolCalling: &model.ToolCallingConfig{
+							ToolCallParser:       apiutils.Of("granite"),
+							ChatTemplate:         apiutils.Of("opt/app-root/template/tool_chat_template_granite.jinja"),
+							EnableAutoToolChoice: model.PtrBool(true),
+							RequiredArgs:         []string{"--config_format granite"},
+						},
+					},
+				},
+			},
+			validateFunc: func(t *testing.T, record ModelProviderRecord) {
+				require.NotNil(t, record.Model)
+
+				regularProps := record.Model.GetProperties()
+				require.NotNil(t, regularProps)
+
+				regularPropMap := make(map[string]models.Properties)
+				for _, prop := range *regularProps {
+					regularPropMap[prop.Name] = prop
+				}
+
+				assert.Contains(t, regularPropMap, "serving_config")
+				var servingConfig model.ServingConfig
+				err := json.Unmarshal([]byte(*regularPropMap["serving_config"].StringValue), &servingConfig)
+				require.NoError(t, err)
+				require.NotNil(t, servingConfig.ToolCalling)
+				assert.Equal(t, apiutils.Of("granite"), servingConfig.ToolCalling.ToolCallParser)
+				assert.Equal(t, apiutils.Of("opt/app-root/template/tool_chat_template_granite.jinja"), servingConfig.ToolCalling.ChatTemplate)
+				assert.Equal(t, model.PtrBool(true), servingConfig.ToolCalling.EnableAutoToolChoice)
+				assert.Equal(t, []string{"--config_format granite"}, servingConfig.ToolCalling.RequiredArgs)
+			},
+		},
+		{
+			name: "model with empty servingConfig",
+			yamlModel: yamlModel{
+				CatalogModel: model.CatalogModel{
+					Name:          "model-empty-serving-config",
+					ServingConfig: &model.ServingConfig{},
+				},
+			},
+			validateFunc: func(t *testing.T, record ModelProviderRecord) {
+				require.NotNil(t, record.Model)
+
+				regularProps := record.Model.GetProperties()
+				require.NotNil(t, regularProps)
+
+				regularPropMap := make(map[string]models.Properties)
+				for _, prop := range *regularProps {
+					regularPropMap[prop.Name] = prop
+				}
+
+				assert.Contains(t, regularPropMap, "serving_config")
+				var servingConfig model.ServingConfig
+				err := json.Unmarshal([]byte(*regularPropMap["serving_config"].StringValue), &servingConfig)
+				require.NoError(t, err)
+				assert.Nil(t, servingConfig.ToolCalling)
+			},
+		},
+		{
+			name: "model with servingConfig partial toolCalling fields",
+			yamlModel: yamlModel{
+				CatalogModel: model.CatalogModel{
+					Name: "model-partial-serving-config",
+					ServingConfig: &model.ServingConfig{
+						ToolCalling: &model.ToolCallingConfig{
+							EnableAutoToolChoice: model.PtrBool(false),
+						},
+					},
+				},
+			},
+			validateFunc: func(t *testing.T, record ModelProviderRecord) {
+				require.NotNil(t, record.Model)
+
+				regularProps := record.Model.GetProperties()
+				require.NotNil(t, regularProps)
+
+				regularPropMap := make(map[string]models.Properties)
+				for _, prop := range *regularProps {
+					regularPropMap[prop.Name] = prop
+				}
+
+				assert.Contains(t, regularPropMap, "serving_config")
+				var servingConfig model.ServingConfig
+				err := json.Unmarshal([]byte(*regularPropMap["serving_config"].StringValue), &servingConfig)
+				require.NoError(t, err)
+				require.NotNil(t, servingConfig.ToolCalling)
+				assert.Equal(t, model.PtrBool(false), servingConfig.ToolCalling.EnableAutoToolChoice)
+				assert.Nil(t, servingConfig.ToolCalling.ToolCallParser)
+				assert.Nil(t, servingConfig.ToolCalling.ChatTemplate)
+				assert.Nil(t, servingConfig.ToolCalling.RequiredArgs)
 			},
 		},
 		{

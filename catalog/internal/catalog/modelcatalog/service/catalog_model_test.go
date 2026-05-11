@@ -1464,6 +1464,36 @@ func TestCatalogModelRepository(t *testing.T) {
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrCatalogModelNotFound))
 	})
+
+	t.Run("TestQuerySearchMatchesValidatedTasks", func(t *testing.T) {
+		uniqueTerm := "xyzspecialvalidated"
+
+		modelWithValidatedTask := &models.CatalogModelImpl{
+			TypeID: apiutils.Of(typeID),
+			Attributes: &models.CatalogModelAttributes{
+				Name:       apiutils.Of("query-vtask-model"),
+				ExternalID: apiutils.Of("query-vtask-ext"),
+			},
+			Properties: &[]dbmodels.Properties{
+				{Name: "source_id", StringValue: apiutils.Of("query-vtask-source")},
+				{Name: "tasks", StringValue: apiutils.Of(`["text-generation"]`)},
+				{Name: "validated_tasks", StringValue: apiutils.Of(fmt.Sprintf(`["%s"]`, uniqueTerm))},
+			},
+		}
+
+		_, err := repo.Save(modelWithValidatedTask)
+		require.NoError(t, err)
+
+		query := uniqueTerm
+		listOptions := models.CatalogModelListOptions{
+			Query: &query,
+		}
+		result, err := repo.List(listOptions)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, 1, len(result.Items))
+		assert.Equal(t, "query-vtask-source:query-vtask-model", *result.Items[0].GetAttributes().Name)
+	})
 }
 
 func createTestCatalogModelWithSourceID(t *testing.T, sourceID string) models.CatalogModel {

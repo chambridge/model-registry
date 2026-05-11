@@ -151,6 +151,19 @@ func (ym *yamlModel) convertModelProperties() ([]models.Properties, []models.Pro
 		properties = append(properties, models.NewStringProperty("tasks", string(tasksJSON), false))
 	}
 
+	if ym.ValidatedTasks == nil {
+		ym.ValidatedTasks = []string{}
+	}
+	if validatedTasksJSON, err := json.Marshal(ym.ValidatedTasks); err == nil {
+		properties = append(properties, models.NewStringProperty("validated_tasks", string(validatedTasksJSON), false))
+	}
+
+	if ym.ServingConfig != nil {
+		if servingConfigJSON, err := json.Marshal(ym.ServingConfig); err == nil {
+			properties = append(properties, models.NewStringProperty("serving_config", string(servingConfigJSON), false))
+		}
+	}
+
 	// Convert custom properties from the YAML model
 	if customProps := convertCustomProperties(&ym.CustomProperties); customProps != nil {
 		customProperties = append(customProperties, customProps...)
