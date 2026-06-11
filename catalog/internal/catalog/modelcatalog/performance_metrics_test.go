@@ -2,6 +2,7 @@ package modelcatalog
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1573,8 +1574,8 @@ func TestCreateColdStartArtifact(t *testing.T) {
 			wantGPUType:    "A100-80",
 			wantGPUCount:   4,
 			wantSeconds:    &[]float64{587.3}[0],
-			wantExtID:      "cold-start-42-A100-80-4",
-			wantArtName:    "cold-start-A100-80-4",
+			wantExtID:      "cold-start-model-42-A100-80-4",
+			wantArtName:    "cold-start-model-42-A100-80-4",
 			wantRuntimeCmd: "python3 -m vllm.entrypoints.openai.api_server --model RedHatAI/MiniMax-M2.5 --max-model-len -1 --tensor-parallel-size 4 --trust-remote-code",
 		},
 		{
@@ -1588,8 +1589,8 @@ func TestCreateColdStartArtifact(t *testing.T) {
 			wantGPUType:    "H100",
 			wantGPUCount:   1,
 			wantSeconds:    &[]float64{68.0}[0],
-			wantExtID:      "cold-start-42-H100-1",
-			wantArtName:    "cold-start-H100-1",
+			wantExtID:      "cold-start-model-42-H100-1",
+			wantArtName:    "cold-start-model-42-H100-1",
 			wantRuntimeCmd: "python3 -m vllm.entrypoints.openai.api_server --model RedHatAI/MiniMax-M2.5 --max-model-len -1 --tensor-parallel-size 1 --trust-remote-code",
 		},
 		{
@@ -1603,8 +1604,8 @@ func TestCreateColdStartArtifact(t *testing.T) {
 			wantGPUType:    "B200",
 			wantGPUCount:   2,
 			wantSeconds:    nil,
-			wantExtID:      "cold-start-42-B200-2",
-			wantArtName:    "cold-start-B200-2",
+			wantExtID:      "cold-start-model-42-B200-2",
+			wantArtName:    "cold-start-model-42-B200-2",
 			wantRuntimeCmd: "python3 -m vllm.entrypoints.openai.api_server --model RedHatAI/MiniMax-M2.5 --max-model-len -1 --tensor-parallel-size 2 --trust-remote-code",
 		},
 		{
@@ -1617,8 +1618,8 @@ func TestCreateColdStartArtifact(t *testing.T) {
 			wantGPUType:    "H200",
 			wantGPUCount:   4,
 			wantSeconds:    &[]float64{806.7}[0],
-			wantExtID:      "cold-start-42-H200-4",
-			wantArtName:    "cold-start-H200-4",
+			wantExtID:      "cold-start-model-42-H200-4",
+			wantArtName:    "cold-start-model-42-H200-4",
 			wantRuntimeCmd: "",
 		},
 	}
@@ -1626,7 +1627,7 @@ func TestCreateColdStartArtifact(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			externalID := coldStartExternalID(modelID, tt.entry)
-			artifact := createColdStartArtifact(tt.entry, externalID, typeID)
+			artifact := createColdStartArtifact(tt.entry, externalID, modelID, typeID)
 
 			if artifact == nil {
 				t.Fatal("expected non-nil artifact")
@@ -1755,7 +1756,7 @@ func TestProcessModelArtifactsBatch_ColdStartDedup(t *testing.T) {
 
 	modelID := int32(1)
 	typeID := int32(7)
-	existingExternalID := "cold-start-1-A100-2"
+	existingExternalID := "cold-start-model-1-A100-2"
 
 	mockRepo := &mockMetricsArtifactRepo{
 		listResult: &dbmodels.ListWrapper[models.CatalogMetricsArtifact]{
@@ -1816,9 +1817,48 @@ func TestProcessModelArtifactsBatch_ColdStartInvalidGPUCount(t *testing.T) {
 	}
 
 	attrs := savedArtifacts[0].GetAttributes()
-	wantExtID := "cold-start-1-H200-2"
+	wantExtID := "cold-start-model-1-H200-2"
 	if *attrs.ExternalID != wantExtID {
 		t.Errorf("expected saved artifact ExternalID = %q, got %q", wantExtID, *attrs.ExternalID)
+	}
+}
+
+func TestProcessModelArtifactsBatch_ColdStartNamesUniqueAcrossModels(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	coldStartMatrix := []coldStartEntry{
+		{GPUType: "H100", GPUCount: 4, ColdStartTimeToLoadSeconds: 105.7},
+		{GPUType: "H200", GPUCount: 2, ColdStartTimeToLoadSeconds: 98.5},
+	}
+
+	typeID := int32(7)
+
+	// Collect all artifact names across both models to check uniqueness
+	allNames := map[string]int32{}
+
+	for _, modelID := range []int32{1, 2} {
+		mockRepo := &mockMetricsArtifactRepo{
+			listResult: &dbmodels.ListWrapper[models.CatalogMetricsArtifact]{},
+			batchSaveFunc: func(artifacts []models.CatalogMetricsArtifact, parentID *int32) ([]models.CatalogMetricsArtifact, error) {
+				for _, a := range artifacts {
+					name := *a.GetAttributes().Name
+					if prev, exists := allNames[name]; exists {
+						t.Errorf("artifact name %q from model %d collides with model %d — would violate UNIQUE(type_id, name) constraint", name, modelID, prev)
+					}
+					allNames[name] = modelID
+				}
+				return artifacts, nil
+			},
+		}
+
+		_, err := processModelArtifactsBatch(tmpDir, modelID, fmt.Sprintf("test-model-%d", modelID), nil, coldStartMatrix, mockRepo, typeID)
+		if err != nil {
+			t.Fatalf("processModelArtifactsBatch() model %d error = %v", modelID, err)
+		}
+	}
+
+	if len(allNames) != 4 {
+		t.Errorf("expected 4 unique artifact names (2 GPU configs x 2 models), got %d", len(allNames))
 	}
 }
 
